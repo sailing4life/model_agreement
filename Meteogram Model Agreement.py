@@ -345,6 +345,39 @@ if len(common_index) == 0:
 
 models: Dict[str, pd.DataFrame] = {name: regrid(df, common_index) for name, df in models_raw.items()}
 
+# ---- Time selection
+st.subheader("Time selection")
+mode = st.radio("Select time range using:", ["Slider", "Manual inputs"], horizontal=True)
+
+t_min = common_index.min().to_pydatetime()
+t_max = common_index.max().to_pydatetime()
+
+if mode == "Slider":
+    win = st.slider(
+        "Time window",
+        min_value=t_min,
+        max_value=t_max,
+        value=(t_min, t_max),
+        format="YYYY-MM-DD HH:mm",
+        key="time_window_slider",
+    )
+    start_t, end_t = pd.to_datetime(win[0]), pd.to_datetime(win[1])
+else:
+    start_t = st.datetime_input("Start", value=t_min, min_value=t_min, max_value=t_max, key="start_dt")
+    end_t   = st.datetime_input("End",   value=t_max, min_value=t_min, max_value=t_max, key="end_dt")
+    start_t, end_t = pd.to_datetime(start_t), pd.to_datetime(end_t)
+
+if start_t > end_t:
+    st.warning("Start is after end; swapping.")
+    start_t, end_t = end_t, start_t
+
+# Apply window to model data
+models = {name: d.loc[(d.index >= start_t) & (d.index <= end_t)] for name, d in models.items()}
+
+# Build the time index for plots/exports
+selected_index = common_index[(common_index >= start_t) & (common_index <= end_t)]
+time_index = selected_index if len(selected_index) > 0 else common_index
+
 # Optional smoothing
 if smooth:
     for name, df in models.items():
@@ -482,7 +515,7 @@ if summary_rows:
     st.dataframe(pd.DataFrame(summary_rows).set_index("Model").round(2))
 
 # Export merged dataset
-merged = pd.DataFrame(index=common_index)
+merged = pd.DataFrame(index=(time_index if 'time_index' in globals() else common_index))
 for name, df in models.items():
     if 'TWS' in df:
         merged[f"{name}_TWS_{speed_unit}"] = (df['TWS']*conv)
@@ -504,4 +537,3 @@ st.download_button(
 )
 
 st.caption("Agreement metrics shown as percentages: speed — (1 - σ/μ)×100 and fraction within ±band×100; direction — circular resultant length R×100. Higher is better.")
-
