@@ -16,7 +16,7 @@ import streamlit as st
 # App config
 # -------------------------
 st.set_page_config(page_title="Meteogram Model Agreement", layout="wide")
-st.title("📈 Meteogram Model Agreement (Minimal)")
+st.title("📈 Meteogram Model Agreement")
 st.caption("Upload multiple CSV meteograms, compare time series, and see agreement.")
 
 # -------------------------
@@ -300,67 +300,118 @@ if dir_agree_R is not None:
     dir_sigma_deg = np.rad2deg(dir_sigma_rad)  # Series aligned to time
 
 # -------------------------
-# PLOTS
+# PLOTS — per-tab shared x + common titles
 # -------------------------
 tab_speed, tab_dir = st.tabs(["Wind Speed", "Wind Direction"])
 
+# ---- SPEED TAB ----
 with tab_speed:
     if not frames_speed:
         st.info("No wind speed columns detected.")
     else:
-        fig1, ax1 = plt.subplots(figsize=(12,5))
+        # Figure: Speed (top) + Agreement % (bottom), shared x
+        figS, (axS1, axS2) = plt.subplots(
+            2, 1, sharex=True, figsize=(12, 8),
+            gridspec_kw={"height_ratios": [2.0, 1.0]}
+        )
+
+        # Top: wind speed time series
         for name, df in models.items():
-            if "TWS" not in df: continue
-            ax1.plot(df.index, (df["TWS"]*conv).values, alpha=0.6, linewidth=1.5, label=name)
+            if "TWS" not in df:
+                continue
+            axS1.plot(df.index, (df["TWS"]*conv).values, alpha=0.7, linewidth=1.5, label=name)
+
         if show_mean and mean_speed is not None:
-            ax1.plot(mean_speed.index, mean_speed.values, linewidth=2.0, linestyle="--", label="Ensemble mean")
+            axS1.plot(mean_speed.index, mean_speed.values, linewidth=2.2, linestyle="--", label="Ensemble mean")
+
         if show_spread and std_speed is not None and mean_speed is not None:
-            ax1.fill_between(mean_speed.index, (mean_speed-std_speed).values, (mean_speed+std_speed).values,
-                             alpha=0.15, label="±1σ")
-        ax1.set_ylabel(f"Wind speed [{speed_unit}]"); ax1.set_xlabel("Time")
-        ax1.grid(True, alpha=0.3); ax1.legend(ncols=3, fontsize=9)
-        st.pyplot(fig1, clear_figure=True)
+            axS1.fill_between(
+                mean_speed.index,
+                (mean_speed - std_speed).values,
+                (mean_speed + std_speed).values,
+                alpha=0.15, label="±1σ"
+            )
 
-        if speed_agree_cv_pct is not None or speed_agree_band_pct is not None:
-            fig2, ax2 = plt.subplots(figsize=(12,3))
-            if speed_agree_cv_pct   is not None: ax2.plot(speed_agree_cv_pct.index, speed_agree_cv_pct.values,   label="Agreement (1-σ/μ) %", linewidth=1.6)
-            if speed_agree_band_pct is not None: ax2.plot(speed_agree_band_pct.index, speed_agree_band_pct.values, label=f"Within ±{band_val:g} {speed_unit} %", linewidth=1.6)
-            ax2.set_ylim(0,100); ax2.set_ylabel("Agreement [%]"); ax2.set_xlabel("Time")
-            ax2.grid(True, alpha=0.3); ax2.legend()
-            st.pyplot(fig2, clear_figure=True)
+        axS1.set_ylabel(f"Wind speed [{speed_unit}]")
+        axS1.grid(True, alpha=0.3)
+        axS1.legend(ncols=3, fontsize=9)
 
+        # Bottom: agreement %
+        has_any_speed_agree = (speed_agree_cv_pct is not None) or (speed_agree_band_pct is not None)
+        if has_any_speed_agree:
+            if speed_agree_cv_pct is not None:
+                axS2.plot(
+                    speed_agree_cv_pct.index, speed_agree_cv_pct.values,
+                    linewidth=1.8, label="Agreement (1−σ/μ) %"
+                )
+            if speed_agree_band_pct is not None:
+                axS2.plot(
+                    speed_agree_band_pct.index, speed_agree_band_pct.values,
+                    linewidth=1.8, label=f"Within ±{band_val:g} {speed_unit} %"
+                )
+            axS2.set_ylim(0, 100)
+            axS2.set_ylabel("Agreement [%]")
+            axS2.set_xlabel("Time")
+            axS2.grid(True, alpha=0.3)
+            axS2.legend()
+        else:
+            axS2.set_axis_off()
+            axS2.text(0.5, 0.5, "No agreement metrics available", ha="center", va="center", transform=axS2.transAxes)
+
+        figS.suptitle("Wind Speed — Models & Agreement", y=0.98)
+        figS.tight_layout(rect=[0, 0, 1, 0.96])
+        st.pyplot(figS, clear_figure=True)
+
+# ---- DIRECTION TAB ----
 with tab_dir:
     if not frames_dir:
         st.info("No wind direction columns detected.")
     else:
-        fig3, ax3 = plt.subplots(figsize=(12,5))
-        for name, df in models.items():
-            if "TWD" not in df: continue
-            y = circular_unwrap_deg(df["TWD"].values)
-            ax3.plot(df.index, y, alpha=0.7, linewidth=1.5, label=name)
+        # Figure: Direction (top) + Agreement % (bottom), shared x
+        figD, (axD1, axD2) = plt.subplots(
+            2, 1, sharex=True, figsize=(12, 8),
+            gridspec_kw={"height_ratios": [2.0, 1.0]}
+        )
 
-        # mean direction (dashed)
+        # Top: direction time series (smart unwrapped)
+        for name, df in models.items():
+            if "TWD" not in df:
+                continue
+            y = circular_unwrap_deg(df["TWD"].values)
+            axD1.plot(df.index, y, alpha=0.7, linewidth=1.5, label=name)
+
+        # Circular mean (dashed) + optional ±1σ circular band
         if mean_dir is not None:
             mean_unwrapped = pd.Series(circular_unwrap_deg(mean_dir.values), index=mean_dir.index)
-            ax3.plot(mean_unwrapped.index, mean_unwrapped.values, linewidth=2.0, linestyle="--", label="Circular mean")
+            axD1.plot(mean_unwrapped.index, mean_unwrapped.values, linewidth=2.2, linestyle="--", label="Circular mean")
 
-            # ±1σ circular band (optional)
             if show_dir_sigma and dir_sigma_deg is not None:
-                sig = dir_sigma_deg.reindex(mean_unwrapped.index).interpolate().fillna(method="bfill").fillna(method="ffill")
+                sig = dir_sigma_deg.reindex(mean_unwrapped.index).interpolate()
+                sig = sig.fillna(method="bfill").fillna(method="ffill")
                 upper = mean_unwrapped + sig
                 lower = mean_unwrapped - sig
-                ax3.fill_between(mean_unwrapped.index, lower.values, upper.values, alpha=0.12, label="±1σ (circular)")
+                axD1.fill_between(mean_unwrapped.index, lower.values, upper.values, alpha=0.15, label="±1σ (circular)")
 
-        ax3.set_ylabel("Wind direction [°]"); ax3.set_xlabel("Time")
-        ax3.grid(True, alpha=0.3); ax3.legend(ncols=3, fontsize=9)
-        st.pyplot(fig3, clear_figure=True)
+        axD1.set_ylabel("Wind direction [°]")
+        axD1.grid(True, alpha=0.3)
+        axD1.legend(ncols=3, fontsize=9)
 
+        # Bottom: R% agreement
         if dir_agree_R_pct is not None:
-            fig4, ax4 = plt.subplots(figsize=(12,3))
-            ax4.plot(dir_agree_R_pct.index, dir_agree_R_pct.values, linewidth=1.6, label="Directional agreement (R) %")
-            ax4.set_ylim(0,100); ax4.set_ylabel("Agreement [%]"); ax4.set_xlabel("Time")
-            ax4.grid(True, alpha=0.3); ax4.legend()
-            st.pyplot(fig4, clear_figure=True)
+            axD2.plot(dir_agree_R_pct.index, dir_agree_R_pct.values, linewidth=1.8, label="Directional agreement (R) %")
+            axD2.set_ylim(0, 100)
+            axD2.set_ylabel("Agreement [%]")
+            axD2.set_xlabel("Time")
+            axD2.grid(True, alpha=0.3)
+            axD2.legend()
+        else:
+            axD2.set_axis_off()
+            axD2.text(0.5, 0.5, "No directional agreement available", ha="center", va="center", transform=axD2.transAxes)
+
+        figD.suptitle("Wind Direction — Models & Agreement", y=0.98)
+        figD.tight_layout(rect=[0, 0, 1, 0.96])
+        st.pyplot(figD, clear_figure=True)
+
 
 # -------------------------
 # Export
