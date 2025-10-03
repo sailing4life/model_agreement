@@ -526,20 +526,30 @@ with _tab3:
     colA, colB = st.columns(2, gap="large")
 
     # Speed pairwise mean |Δ| heatmap
-    with colA:
-        st.subheader("Speed pairwise mean |Δ|")
-        if speed_df is None or speed_df.shape[1] < 2:
-            st.info("Need at least two speed series to build a heatmap.")
-        else:
-            names = list(speed_df.columns)
-            S = pd.DataFrame(index=names, columns=names, dtype=float)
-            for i in names:
-                for j in names:
-                    common = speed_df[[i, j]].dropna()
-                    S.loc[i, j] = (common[i] - common[j]).abs().mean() if len(common) else np.nan
+with colA:
+    st.subheader("Speed pairwise mean |Δ|")
+    if speed_df is None or speed_df.shape[1] < 2:
+        st.info("Need at least two speed series to build a heatmap.")
+    else:
+        names = list(speed_df.columns)
+        S = pd.DataFrame(index=names, columns=names, dtype=float)
+        for i in names:
+            for j in names:
+                common = speed_df[[i, j]].dropna()
+                S.loc[i, j] = (common[i] - common[j]).abs().mean() if len(common) else np.nan
 
-            figS, axS = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
-            im = axS.imshow(S.values.astype(float), aspect="equal")
+        A = np.array(S.values, dtype=float)
+        finite = np.isfinite(A)
+        figS, axS = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
+
+        if not finite.any():
+            axS.set_axis_off()
+            st.pyplot(figS, clear_figure=True)
+            st.info("No overlapping data in the selected time window to compute speed differences.")
+        else:
+            vmin = np.nanmin(A)
+            vmax = np.nanmax(A)
+            im = axS.imshow(A, aspect="equal", vmin=vmin, vmax=vmax)
             axS.set_xticks(range(len(names)))
             axS.set_yticks(range(len(names)))
             axS.set_xticklabels(names, rotation=45, ha='right')
@@ -547,33 +557,46 @@ with _tab3:
             cbar = figS.colorbar(im, ax=axS)
             cbar.set_label(f"Mean |Δ| [{speed_unit}]")
             axS.set_title("Mean absolute difference in wind speed")
-            # annotate if small
+
+            # annotate when matrix isn't too large
             if len(names) <= 8:
                 for r in range(len(names)):
                     for c in range(len(names)):
-                        val = S.values[r, c]
+                        val = A[r, c]
                         if np.isfinite(val):
                             axS.text(c, r, f"{val:.1f}", ha="center", va="center", fontsize=9)
+
             st.pyplot(figS, clear_figure=True)
 
-    # Direction pairwise mean circular |Δ| heatmap
-    with colB:
-        st.subheader("Direction pairwise mean circular |Δ|")
-        if dir_df is None or dir_df.shape[1] < 2:
-            st.info("Need at least two direction series to build a heatmap.")
-        else:
-            names = list(dir_df.columns)
-            D = pd.DataFrame(index=names, columns=names, dtype=float)
-            for i in names:
-                for j in names:
-                    common = dir_df[[i, j]].dropna()
-                    if len(common):
-                        D.loc[i, j] = circular_abs_diff(common[i].values, common[j].values).mean()
-                    else:
-                        D.loc[i, j] = np.nan
 
-            figD, axD = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
-            im = axD.imshow(D.values.astype(float), aspect="equal")
+    # Direction pairwise mean circular |Δ| heatmap
+with colB:
+    st.subheader("Direction pairwise mean circular |Δ|")
+    if dir_df is None or dir_df.shape[1] < 2:
+        st.info("Need at least two direction series to build a heatmap.")
+    else:
+        names = list(dir_df.columns)
+        D = pd.DataFrame(index=names, columns=names, dtype=float)
+        for i in names:
+            for j in names:
+                common = dir_df[[i, j]].dropna()
+                if len(common):
+                    D.loc[i, j] = circular_abs_diff(common[i].values, common[j].values).mean()
+                else:
+                    D.loc[i, j] = np.nan
+
+        A = np.array(D.values, dtype=float)
+        finite = np.isfinite(A)
+        figD, axD = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
+
+        if not finite.any():
+            axD.set_axis_off()
+            st.pyplot(figD, clear_figure=True)
+            st.info("No overlapping data in the selected time window to compute directional differences.")
+        else:
+            vmin = np.nanmin(A)
+            vmax = np.nanmax(A)
+            im = axD.imshow(A, aspect="equal", vmin=vmin, vmax=vmax)
             axD.set_xticks(range(len(names)))
             axD.set_yticks(range(len(names)))
             axD.set_xticklabels(names, rotation=45, ha='right')
@@ -581,14 +604,16 @@ with _tab3:
             cbar = figD.colorbar(im, ax=axD)
             cbar.set_label("Mean circular |Δ| [°]")
             axD.set_title("Mean circular absolute difference in direction")
-            # annotate if small
+
             if len(names) <= 8:
                 for r in range(len(names)):
                     for c in range(len(names)):
-                        val = D.values[r, c]
+                        val = A[r, c]
                         if np.isfinite(val):
                             axD.text(c, r, f"{val:.0f}", ha="center", va="center", fontsize=9)
+
             st.pyplot(figD, clear_figure=True)
+
 
 # ============================
 # Summary Table & Export
