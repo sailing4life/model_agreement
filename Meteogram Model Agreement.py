@@ -43,7 +43,7 @@ def _sniff_and_read(file: bytes) -> pd.DataFrame:
         delim = dialect.delimiter
     except Exception:
         # Fallback common delimiters
-        for delim in [',', ';', '\t', '|']:
+        for delim in [',', ';', '	', '|']:
             if delim in raw.splitlines()[0]:
                 break
     # Parse with flexible decimal handling
@@ -209,11 +209,6 @@ def circular_unwrap_deg(y: np.ndarray) -> np.ndarray:
             unwrapped[i] += 360
     return unwrapped
 
-def circular_abs_diff(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Absolute circular difference in degrees, in [0, 180]."""
-    d = (a - b + 180.0) % 360.0 - 180.0
-    return np.abs(d)
-
 # ============================
 # Sidebar — Options
 # ============================
@@ -227,7 +222,6 @@ with st.sidebar:
     )
     show_mean = st.checkbox("Show ensemble mean", value=True)
     show_spread = st.checkbox("Shade ±1σ spread (speed)", value=True)
-    show_quantiles = st.checkbox("Show quantile ribbons (P10–P90 & P25–P75)", value=True)
     smooth = st.checkbox("Apply mild smoothing (rolling 3)", value=False)
     st.markdown("---")
     st.caption("If auto-detection fails, override columns and rename models below.")
@@ -394,6 +388,7 @@ if smooth:
             df['TWD'] = (np.angle(z) * 180/np.pi) % 360
 
 # Units
+conv = 0.514444 if st.session_state.get('speed_unit', speed_unit) == "m/s" else 1.0
 if speed_unit == "m/s":
     conv = 0.514444
 else:
@@ -420,59 +415,33 @@ if frames_dir:
 # Agreements (as PERCENT)
 speed_agree_cv = agreement_speed(frames_speed) if frames_speed else None
 speed_agree_band = agreement_speed_threshold(frames_speed, band=band_val) if frames_speed else None
+
 dir_agree_R = agreement_direction(frames_dir) if frames_dir else None
 
 speed_agree_cv_pct   = (speed_agree_cv*100.0) if speed_agree_cv is not None else None
 speed_agree_band_pct = (speed_agree_band*100.0) if speed_agree_band is not None else None
 dir_agree_R_pct      = (dir_agree_R*100.0) if dir_agree_R is not None else None
 
-# Build aligned matrices for heatmaps / quantiles
-speed_df = None
-if frames_speed:
-    speed_df = pd.concat(
-        {name: (df['TWS']*conv) for name, df in models.items() if 'TWS' in df},
-        axis=1
-    )
-dir_df = None
-if frames_dir:
-    dir_df = pd.concat(
-        {name: df['TWD'] for name, df in models.items() if 'TWD' in df},
-        axis=1
-    )
-
 # ============================
 # PLOTS
 # ============================
-_tab1, _tab2, _tab3 = st.tabs(["Wind Speed", "Wind Direction", "Heatmaps"])
+_tab1, _tab2 = st.tabs(["Wind Speed", "Wind Direction"])
 
-# --- Wind Speed (with optional quantile ribbons) ---
 with _tab1:
-    if speed_df is None or speed_df.empty:
+    if not frames_speed:
         st.info("No wind speed columns detected.")
     else:
         fig1, ax1 = plt.subplots(figsize=(12, 5))
-
-        # Quantile ribbons (across models per timestamp)
-        if show_quantiles and speed_df.shape[1] >= 2:
-            q10 = speed_df.quantile(0.10, axis=1)
-            q25 = speed_df.quantile(0.25, axis=1)
-            q50 = speed_df.quantile(0.50, axis=1)
-            q75 = speed_df.quantile(0.75, axis=1)
-            q90 = speed_df.quantile(0.90, axis=1)
-            ax1.fill_between(q90.index, q10.values, q90.values, alpha=0.08, label="P10–P90")
-            ax1.fill_between(q75.index, q25.values, q75.values, alpha=0.15, label="P25–P75")
-            ax1.plot(q50.index, q50.values, linewidth=2.2, linestyle='-', label="Median")
-
         # Individual models
-        for name in speed_df.columns:
-            ax1.plot(speed_df.index, speed_df[name].values, alpha=0.6, linewidth=1.2, label=name)
-
-        # Mean and spread (σ)
+        for name, df in models.items():
+            if 'TWS' not in df:
+                continue
+            ax1.plot(df.index, df['TWS']*conv, alpha=0.6, linewidth=1.5, label=name)
+        # Mean and spread
         if show_mean and mean_speed is not None:
-            ax1.plot(mean_speed.index, mean_speed.values, linewidth=2.0, linestyle='--', label="Ensemble mean")
+            ax1.plot(mean_speed.index, mean_speed.values, linewidth=2.5, label="Ensemble mean", linestyle='--')
         if show_spread and std_speed is not None and mean_speed is not None:
-            ax1.fill_between(mean_speed.index, (mean_speed-std_speed).values, (mean_speed+std_speed).values, alpha=0.12, label="±1σ")
-
+            ax1.fill_between(mean_speed.index, (mean_speed-std_speed).values, (mean_speed+std_speed).values, alpha=0.15, label="±1σ")
         ax1.set_ylabel(f"Wind speed [{speed_unit}]")
         ax1.set_xlabel("Time")
         ax1.grid(True, alpha=0.3)
@@ -493,18 +462,19 @@ with _tab1:
             ax2.legend()
             st.pyplot(fig2, clear_figure=True)
 
-# --- Wind Direction ---
 with _tab2:
-    if dir_df is None or dir_df.empty:
+    if not frames_dir:
         st.info("No wind direction columns detected.")
     else:
         fig3, ax3 = plt.subplots(figsize=(12, 5))
-        for name in dir_df.columns:
-            y = circular_unwrap_deg(dir_df[name].values)
-            ax3.plot(dir_df.index, y, alpha=0.7, linewidth=1.2, label=name)
+        for name, df in models.items():
+            if 'TWD' not in df:
+                continue
+            y = circular_unwrap_deg(df['TWD'].values)
+            ax3.plot(df.index, y, alpha=0.7, linewidth=1.5, label=name)
         if mean_dir is not None:
             y = circular_unwrap_deg(mean_dir.values)
-            ax3.plot(mean_dir.index, y, linewidth=2.0, linestyle='--', label="Circular mean")
+            ax3.plot(mean_dir.index, y, linewidth=2.5, linestyle='--', label="Circular mean")
         ax3.set_ylabel("Wind direction [°]")
         ax3.set_xlabel("Time")
         ax3.grid(True, alpha=0.3)
@@ -520,100 +490,6 @@ with _tab2:
             ax4.grid(True, alpha=0.3)
             ax4.legend()
             st.pyplot(fig4, clear_figure=True)
-
-# --- Heatmaps (Speed & Direction) ---
-with _tab3:
-    colA, colB = st.columns(2, gap="large")
-
-    # Speed pairwise mean |Δ| heatmap
-with colA:
-    st.subheader("Speed pairwise mean |Δ|")
-    if speed_df is None or speed_df.shape[1] < 2:
-        st.info("Need at least two speed series to build a heatmap.")
-    else:
-        names = list(speed_df.columns)
-        S = pd.DataFrame(index=names, columns=names, dtype=float)
-        for i in names:
-            for j in names:
-                common = speed_df[[i, j]].dropna()
-                S.loc[i, j] = (common[i] - common[j]).abs().mean() if len(common) else np.nan
-
-        A = np.array(S.values, dtype=float)
-        finite = np.isfinite(A)
-        figS, axS = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
-
-        if not finite.any():
-            axS.set_axis_off()
-            st.pyplot(figS, clear_figure=True)
-            st.info("No overlapping data in the selected time window to compute speed differences.")
-        else:
-            vmin = np.nanmin(A)
-            vmax = np.nanmax(A)
-            im = axS.imshow(A, aspect="equal", vmin=vmin, vmax=vmax)
-            axS.set_xticks(range(len(names)))
-            axS.set_yticks(range(len(names)))
-            axS.set_xticklabels(names, rotation=45, ha='right')
-            axS.set_yticklabels(names)
-            cbar = figS.colorbar(im, ax=axS)
-            cbar.set_label(f"Mean |Δ| [{speed_unit}]")
-            axS.set_title("Mean absolute difference in wind speed")
-
-            # annotate when matrix isn't too large
-            if len(names) <= 8:
-                for r in range(len(names)):
-                    for c in range(len(names)):
-                        val = A[r, c]
-                        if np.isfinite(val):
-                            axS.text(c, r, f"{val:.1f}", ha="center", va="center", fontsize=9)
-
-            st.pyplot(figS, clear_figure=True)
-
-
-    # Direction pairwise mean circular |Δ| heatmap
-with colB:
-    st.subheader("Direction pairwise mean circular |Δ|")
-    if dir_df is None or dir_df.shape[1] < 2:
-        st.info("Need at least two direction series to build a heatmap.")
-    else:
-        names = list(dir_df.columns)
-        D = pd.DataFrame(index=names, columns=names, dtype=float)
-        for i in names:
-            for j in names:
-                common = dir_df[[i, j]].dropna()
-                if len(common):
-                    D.loc[i, j] = circular_abs_diff(common[i].values, common[j].values).mean()
-                else:
-                    D.loc[i, j] = np.nan
-
-        A = np.array(D.values, dtype=float)
-        finite = np.isfinite(A)
-        figD, axD = plt.subplots(figsize=(max(6, 0.6*len(names)+4), max(6, 0.6*len(names)+4)))
-
-        if not finite.any():
-            axD.set_axis_off()
-            st.pyplot(figD, clear_figure=True)
-            st.info("No overlapping data in the selected time window to compute directional differences.")
-        else:
-            vmin = np.nanmin(A)
-            vmax = np.nanmax(A)
-            im = axD.imshow(A, aspect="equal", vmin=vmin, vmax=vmax)
-            axD.set_xticks(range(len(names)))
-            axD.set_yticks(range(len(names)))
-            axD.set_xticklabels(names, rotation=45, ha='right')
-            axD.set_yticklabels(names)
-            cbar = figD.colorbar(im, ax=axD)
-            cbar.set_label("Mean circular |Δ| [°]")
-            axD.set_title("Mean circular absolute difference in direction")
-
-            if len(names) <= 8:
-                for r in range(len(names)):
-                    for c in range(len(names)):
-                        val = A[r, c]
-                        if np.isfinite(val):
-                            axD.text(c, r, f"{val:.0f}", ha="center", va="center", fontsize=9)
-
-            st.pyplot(figD, clear_figure=True)
-
 
 # ============================
 # Summary Table & Export
