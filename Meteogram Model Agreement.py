@@ -205,9 +205,27 @@ def agreement_direction(series_list: List[pd.Series]) -> pd.Series:
     return M.apply(row_R, axis=1)
 
 def circular_unwrap_deg(y: np.ndarray) -> np.ndarray:
-    rad = np.deg2rad(y)
-    unwrapped = np.unwrap(rad)
-    return np.rad2deg(unwrapped)
+    """
+    Smart unwrap: keep the series continuous but constrain it to stay within
+    ±180° of the first value. This avoids long drifts (e.g., to 600°) while
+    staying smooth across 0/360.
+    """
+    if y is None or len(y) == 0:
+        return y
+    arr = np.asarray(y, dtype=float)
+    # Normalize into [0, 360)
+    arr = np.mod(arr, 360.0)
+    # Unwrap in radians for continuity
+    unwrapped = np.rad2deg(np.unwrap(np.deg2rad(arr)))
+    # Constrain relative to the first value
+    base = unwrapped[0]
+    for i in range(len(unwrapped)):
+        while unwrapped[i] - base > 180:
+            unwrapped[i] -= 360
+        while unwrapped[i] - base < -180:
+            unwrapped[i] += 360
+    return unwrapped
+
 
 # ============================
 # Sidebar — Options
