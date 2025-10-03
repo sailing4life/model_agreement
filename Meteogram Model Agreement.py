@@ -5,6 +5,7 @@
 import io
 import csv
 from typing import Dict, List, Tuple
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -358,6 +359,7 @@ if mode == "Slider":
         min_value=t_min,
         max_value=t_max,
         value=(t_min, t_max),
+        step=timedelta(hours=1),  # hourly increments
         format="YYYY-MM-DD HH:mm",
         key="time_window_slider",
     )
