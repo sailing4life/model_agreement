@@ -344,11 +344,11 @@ with tab_speed:
                     speed_agree_cv_pct.index, speed_agree_cv_pct.values,
                     linewidth=1.8, label="Agreement (1−σ/μ) %"
                 )
-            if speed_agree_band_pct is not None:
-                axS2.plot(
-                    speed_agree_band_pct.index, speed_agree_band_pct.values,
-                    linewidth=1.8, label=f"Within ±{band_val:g} {speed_unit} %"
-                )
+            #if speed_agree_band_pct is not None:
+            #    axS2.plot(
+            #        speed_agree_band_pct.index, speed_agree_band_pct.values,
+            #        linewidth=1.8, label=f"Within ±{band_val:g} {speed_unit} %"
+            #    )
             axS2.set_ylim(0, 100)
             axS2.set_ylabel("Agreement [%]")
             axS2.set_xlabel("Time")
