@@ -205,25 +205,9 @@ def agreement_direction(series_list: List[pd.Series]) -> pd.Series:
     return M.apply(row_R, axis=1)
 
 def circular_unwrap_deg(y: np.ndarray) -> np.ndarray:
-    """Smart unwrap: keep series continuous but constrain it to stay within ±180° of
-    the first valid angle. This avoids long drifts to 500–600° while keeping
-    smooth behavior across 0/360.
-    """
-    if y is None or len(y) == 0:
-        return y
-    arr = np.asarray(y, dtype=float)
-    # Normalize into [0, 360)
-    arr = np.mod(arr, 360.0)
-    # Basic unwrap in radians
-    unwrapped = np.rad2deg(np.unwrap(np.deg2rad(arr)))
-    # Constrain relative to first value
-    base = unwrapped[0]
-    for i in range(len(unwrapped)):
-        while unwrapped[i] - base > 180:
-            unwrapped[i] -= 360
-        while unwrapped[i] - base < -180:
-            unwrapped[i] += 360
-    return unwrapped
+    rad = np.deg2rad(y)
+    unwrapped = np.unwrap(rad)
+    return np.rad2deg(unwrapped)
 
 # ============================
 # Sidebar — Options
@@ -234,7 +218,9 @@ with st.sidebar:
     band_val = st.number_input("Agreement band for speed (±)", min_value=0.0, max_value=20.0, value=2.0, step=0.5, help="Speed models within this band around the median count as agreeing.")
     show_mean = st.checkbox("Show ensemble mean", value=True)
     show_spread = st.checkbox("Shade ±1σ spread (speed)", value=True)
-    smooth = st.che
+    smooth = st.checkbox("Apply mild smoothing (rolling 3)", value=False)
+    st.markdown("---")
+    st.caption("If auto-detection fails, you can override per file in the table below after upload.")
 
 # ============================
 # Upload Section
