@@ -348,7 +348,7 @@ models: Dict[str, pd.DataFrame] = {name: regrid(df, common_index) for name, df i
 
 # ---- Time selection
 st.subheader("Time selection")
-mode = st.radio("Select time range using:", ["Slider", "Manual inputs"], horizontal=True)
+mode = st.radio("Select time range using:", ["Slider"], horizontal=True)
 
 t_min = common_index.min().to_pydatetime()
 t_max = common_index.max().to_pydatetime()
@@ -364,10 +364,6 @@ if mode == "Slider":
         key="time_window_slider",
     )
     start_t, end_t = pd.to_datetime(win[0]), pd.to_datetime(win[1])
-else:
-    start_t = st.datetime_input("Start", value=t_min, min_value=t_min, max_value=t_max, key="start_dt")
-    end_t   = st.datetime_input("End",   value=t_max, min_value=t_min, max_value=t_max, key="end_dt")
-    start_t, end_t = pd.to_datetime(start_t), pd.to_datetime(end_t)
 
 if start_t > end_t:
     st.warning("Start is after end; swapping.")
@@ -454,7 +450,7 @@ with _tab1:
 
         # Agreement score charts (PERCENT)
         if speed_agree_cv_pct is not None or speed_agree_band_pct is not None:
-            fig2, ax2 = plt.subplots(figsize=(12, 2.5))
+            fig2, ax2 = plt.subplots(figsize=(12, 4))
             if speed_agree_cv_pct is not None:
                 ax2.plot(speed_agree_cv_pct.index, speed_agree_cv_pct.values, label="Agreement (1 - σ/μ) %", linewidth=1.8)
             if speed_agree_band_pct is not None:
@@ -486,7 +482,7 @@ with _tab2:
         st.pyplot(fig3, clear_figure=True)
 
         if dir_agree_R_pct is not None:
-            fig4, ax4 = plt.subplots(figsize=(12, 2.5))
+            fig4, ax4 = plt.subplots(figsize=(12, 4))
             ax4.plot(dir_agree_R_pct.index, dir_agree_R_pct.values, linewidth=1.8, label="Directional agreement (R) %")
             ax4.set_ylim(0, 100)
             ax4.set_ylabel("Agreement [%]")
