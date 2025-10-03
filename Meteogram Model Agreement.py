@@ -389,7 +389,7 @@ dir_agree_R = agreement_direction(frames_dir) if frames_dir else None
 
 speed_agree_cv_pct   = (speed_agree_cv*100.0) if speed_agree_cv is not None else None
 speed_agree_band_pct = (speed_agree_band*100.0) if speed_agree_band is not None else None
- dir_agree_R_pct      = (dir_agree_R*100.0) if dir_agree_R is not None else None
+dir_agree_R_pct      = (dir_agree_R*100.0) if dir_agree_R is not None else None
 
 # ============================
 # PLOTS
