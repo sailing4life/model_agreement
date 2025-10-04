@@ -78,6 +78,7 @@ def standardize_columns(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str,str]]:
     time_col = _auto_pick(cols, AUTO_TIME_COL_CANDIDATES)
     tws_col  = _auto_pick(cols, AUTO_TWS_COL_CANDIDATES)
     twd_col  = _auto_pick(cols, AUTO_TWD_COL_CANDIDATES)
+    print(twd_col)
 
     out = df.copy()
     if time_col:
