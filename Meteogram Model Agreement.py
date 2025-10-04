@@ -74,7 +74,7 @@ def to_datetime_series(df: pd.DataFrame, col: str | None) -> pd.Series:
 def standardize_columns(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str,str]]:
     mapping: Dict[str,str] = {}
     cols = list(df.columns)
-
+    print(cols)
     time_col = _auto_pick(cols, AUTO_TIME_COL_CANDIDATES)
     tws_col  = _auto_pick(cols, AUTO_TWS_COL_CANDIDATES)
     twd_col  = _auto_pick(cols, AUTO_TWD_COL_CANDIDATES)
