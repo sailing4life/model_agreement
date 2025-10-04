@@ -212,6 +212,8 @@ with st.sidebar:
     show_dir_sigma = st.checkbox("Shade ±1σ spread (direction)", True)
     smooth = st.checkbox("Apply mild smoothing (rolling 3)", False)
     st.caption("Rename models below if auto-detect is off.")
+    wrap_dir_display = st.checkbox("Wrap direction to 0–360° (display only)", True)
+
 
 # -------------------------
 # Upload
@@ -399,27 +401,31 @@ with tab_dir:
         )
 
         # Top: direction time series (smart unwrapped)
-        for name, df in models.items():
-            if "TWD" not in df:
-                continue
-            y = circular_unwrap_deg(df["TWD"].values)
-            axD1.plot(df.index, y, alpha=0.7, linewidth=1.5, label=name)
+for name, df in models.items():
+    if "TWD" not in df:
+        continue
+    y_unwrapped = circular_unwrap_deg(df["TWD"].values)
+    y_plot = (y_unwrapped + 360) % 360 if wrap_dir_display else y_unwrapped
+    axD1.plot(df.index, y_plot, alpha=0.7, linewidth=1.5, label=name)
 
-        # Circular mean (dashed) + optional ±1σ circular band
-        if mean_dir is not None:
-            mean_unwrapped = pd.Series(circular_unwrap_deg(mean_dir.values), index=mean_dir.index)
-            axD1.plot(mean_unwrapped.index, mean_unwrapped.values, linewidth=2.2, linestyle="--", label="Circular mean")
+# Circular mean (dashed) + optional ±1σ circular band
+if mean_dir is not None:
+    mean_unwrapped = pd.Series(circular_unwrap_deg(mean_dir.values), index=mean_dir.index)
+    mean_plot = ((mean_unwrapped + 360) % 360) if wrap_dir_display else mean_unwrapped
+    axD1.plot(mean_plot.index, mean_plot.values, linewidth=2.2, linestyle="--", label="Circular mean")
 
-            if show_dir_sigma and dir_sigma_deg is not None:
-                sig = dir_sigma_deg.reindex(mean_unwrapped.index).interpolate()
-                sig = sig.fillna(method="bfill").fillna(method="ffill")
-                upper = mean_unwrapped + sig
-                lower = mean_unwrapped - sig
-                axD1.fill_between(mean_unwrapped.index, lower.values, upper.values, alpha=0.15, label="±1σ (circular)")
+    if show_dir_sigma and dir_sigma_deg is not None:
+        sig = dir_sigma_deg.reindex(mean_plot.index).interpolate().fillna(method="bfill").fillna(method="ffill")
+        upper = mean_unwrapped + sig
+        lower = mean_unwrapped - sig
+        # wrap the band for display if requested (note: may look odd at 0° crossings)
+        if wrap_dir_display:
+            upper = (upper + 360) % 360
+            lower = (lower + 360) % 360
+            axD1.fill_between(mean_plot.index, lower.values, upper.values, alpha=0.15, label="±1σ (circular)")
+        else:
+            axD1.fill_between(mean_plot.index, lower.values, upper.values, alpha=0.15, label="±1σ (circular)")
 
-        axD1.set_ylabel("Wind direction [°]")
-        axD1.grid(True, alpha=0.3)
-        axD1.legend(ncols=3, fontsize=9)
 
         # Bottom: R% agreement
         if dir_agree_R_pct is not None:
