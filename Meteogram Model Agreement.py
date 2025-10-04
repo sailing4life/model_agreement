@@ -57,6 +57,7 @@ def _sniff_and_read(file: bytes) -> pd.DataFrame:
     except Exception:
         first_line = raw.splitlines()[0] if raw.splitlines() else ""
         delim = next((d for d in [",", ";", "\t", "|"] if d in first_line), ",")
+
     # EU decimal comma first, fallback to dot
     try:
         return pd.read_csv(io.StringIO(raw), delimiter=delim, decimal=",")
@@ -221,6 +222,10 @@ with st.sidebar:
     show_spread = st.checkbox("Shade ±1σ spread (speed)", True)
     show_dir_sigma = st.checkbox("Shade ±1σ spread (direction)", True)
     wrap_dir_display = st.checkbox("Wrap direction to 0–360° (display only)", True)
+    show_band_agreement = st.checkbox(  # <— NEW: toggle for within ±band
+        lambda: f"Show within ±{band_val:g} {speed_unit} agreement" if band_val else "Show within ±band agreement",
+        True,
+    )
     smooth = st.checkbox("Apply mild smoothing (rolling 3)", False)
     st.caption("Rename models below if auto-detect is off.")
 
@@ -389,7 +394,7 @@ with tab_speed:
                     speed_agree_cv_pct.index, speed_agree_cv_pct.values,
                     linewidth=1.8, label="Agreement (1−σ/μ) %"
                 )
-            if speed_agree_band_pct is not None:
+            if show_band_agreement and speed_agree_band_pct is not None:
                 axS2.plot(
                     speed_agree_band_pct.index, speed_agree_band_pct.values,
                     linewidth=1.8, label=f"Within ±{band_val:g} {speed_unit} %"
