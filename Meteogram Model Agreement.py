@@ -126,7 +126,7 @@ def standardize_columns(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]]
 def infer_common_freq(times: pd.Series) -> pd.Timedelta:
     if times.empty or len(times) < 3:
         return pd.Timedelta(hours=1)
-    diffs = pd.to_timedelta(np.diff(times.values.astype("datetime64[ns]"])))
+    diffs = pd.to_timedelta(np.diff(times.values.astype("datetime64[ns]")))
     med = diffs.median()
     if med <= pd.Timedelta(minutes=12): return pd.Timedelta(minutes=10)
     if med <= pd.Timedelta(minutes=22): return pd.Timedelta(minutes=15)
