@@ -30,7 +30,7 @@ AUTO_TWS_COL_CANDIDATES = [
     "tws","wind","windspeed","wind_speed","ff","ff10","ws","spd","kt"
 ]
 AUTO_TWD_COL_CANDIDATES = [
-    'Wind10m  ',"twd","winddir","wind_direction","dd","dir","wd","wind 10m","wind10m°","Wind10m°","Wind10m deg","Wind10m ","Wind10m",'Wind10m '
+    'Wind10m  ',"twd","winddir","wind_direction","dd","dir","wd","wind 10m","wind10m°","Wind10m°","Wind10m deg","Wind10m ","Wind10m",'Wind10m_'
 ]
 
 @st.cache_data(show_spinner=False)
