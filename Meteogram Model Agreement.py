@@ -6,6 +6,7 @@ import io
 import csv
 from typing import Dict, List, Tuple
 from datetime import timedelta
+import re
 
 import numpy as np
 import pandas as pd
@@ -30,36 +31,59 @@ AUTO_TWS_COL_CANDIDATES = [
     "tws","wind","windspeed","wind_speed","ff","ff10","ws","spd","kt"
 ]
 AUTO_TWD_COL_CANDIDATES = [
-    'Wind10m  ',"twd","winddir","wind_direction","dd","dir","wd","wind 10m","wind10m°","Wind10m°","Wind10m deg","Wind10m ","Wind10m",'Wind10m_'
+    "twd", "winddir", "wind_direction", "dd", "dir", "wd",
+    "wind 10m", "wind10m", "wind10m °", "wind10m deg"
 ]
+
 
 @st.cache_data(show_spinner=False)
 def _sniff_and_read(file: bytes) -> pd.DataFrame:
-    raw = file.decode("utf-8", errors="ignore")
-    # delimiter
+    # Try UTF-8 first; if it fails, fall back to latin-1
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            raw = file.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        # last resort: ignore errors
+        raw = file.decode("utf-8", errors="ignore")
+
+    # Delimiter sniff
     try:
         delim = csv.Sniffer().sniff(raw[:2000]).delimiter
     except Exception:
-        for delim in [",",";","\t","|"]:
-            if delim in raw.splitlines()[0]:
-                break
-    # EU decimals first
+        delim = next((d for d in [",",";","\t","|"] if d in raw.splitlines()[0]), ",")
+
+    # EU decimal comma first, then fallback
     try:
         return pd.read_csv(io.StringIO(raw), delimiter=delim, decimal=",")
     except Exception:
         return pd.read_csv(io.StringIO(raw), delimiter=delim)
 
+
 def _auto_pick(colnames: List[str], candidates: List[str]) -> str | None:
-    lower = {c.lower(): c for c in colnames}
-    for c in candidates:
-        if c in lower:
-            return lower[c]
-    for name in colnames:
-        ln = name.lower().replace(" ","").replace("-","_")
-        for c in candidates:
-            if c in ln:
-                return name
+    # Normalize: lowercase + drop non [a-z0-9]
+    def norm(s: str) -> str:
+        return re.sub(r'[^a-z0-9]+', '', s.lower())
+
+    norm_map = {norm(c): c for c in colnames}  # normalized -> original
+
+    # 1) exact normalized match
+    for cand in candidates:
+        key = norm(cand)
+        if key in norm_map:
+            return norm_map[key]
+
+    # 2) substring normalized match
+    cand_keys = [norm(c) for c in candidates]
+    for c in colnames:
+        nc = norm(c)
+        if any(ck in nc for ck in cand_keys):
+            return c
+
     return None
+
 
 def to_datetime_series(df: pd.DataFrame, col: str | None) -> pd.Series:
     if col is None: raise ValueError("No time column selected.")
