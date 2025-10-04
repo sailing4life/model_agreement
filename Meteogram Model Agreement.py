@@ -188,6 +188,8 @@ with st.sidebar:
     show_band_agreement = st.checkbox(band_label, True)
     smooth = st.checkbox("Apply mild smoothing (rolling 3)", False)
     st.caption("Rename models below if auto-detect is off.")
+    auto_fit_dir_ylim = st.checkbox("Auto-fit direction y-axis to displayed data", True)
+
 
 # -------------------------
 # Upload
@@ -324,38 +326,87 @@ with tab_speed:
             axS2.set_axis_off(); axS2.text(0.5,0.5,"No agreement metrics available", ha="center", va="center", transform=axS2.transAxes)
         figS.suptitle("Wind Speed — Models & Agreement", y=0.98); figS.tight_layout(rect=[0,0,1,0.96]); st.pyplot(figS, clear_figure=True)
 
+# ---- DIRECTION TAB ----
 with tab_dir:
     if not frames_dir:
         st.info("No wind direction columns detected.")
     else:
-        figD, (axD1, axD2) = plt.subplots(2, 1, sharex=True, figsize=(12, 8),
-                                          gridspec_kw={"height_ratios": [2.0, 1.0]})
+        figD, (axD1, axD2) = plt.subplots(
+            2, 1, sharex=True, figsize=(12, 8),
+            gridspec_kw={"height_ratios": [2.0, 1.0]}
+        )
+
+        # Collect all displayed y-values for auto-fit
+        displayed_y = []
+
+        # Top: direction time series (smart unwrapped; wrapped display optional)
         for name, df in models.items():
-            if "TWD" not in df: continue
+            if "TWD" not in df:
+                continue
             y_unwrapped = circular_unwrap_deg(df["TWD"].values)
             y_plot = (y_unwrapped + 360) % 360 if wrap_dir_display else y_unwrapped
             axD1.plot(df.index, y_plot, alpha=0.7, linewidth=1.5, label=name)
+            displayed_y.append(np.asarray(y_plot, dtype=float))
+
+        # Mean + optional ±1σ circular band
         if mean_dir is not None:
             mean_unwrapped = pd.Series(circular_unwrap_deg(mean_dir.values), index=mean_dir.index)
             mean_plot = ((mean_unwrapped + 360) % 360) if wrap_dir_display else mean_unwrapped
             axD1.plot(mean_plot.index, mean_plot.values, linewidth=2.2, linestyle="--", label="Circular mean")
+            displayed_y.append(np.asarray(mean_plot.values, dtype=float))
+
             if show_dir_sigma and dir_sigma_deg is not None:
                 sig = dir_sigma_deg.reindex(mean_plot.index).interpolate().fillna(method="bfill").fillna(method="ffill")
-                upper = mean_unwrapped + sig; lower = mean_unwrapped - sig
+                upper = mean_unwrapped + sig
+                lower = mean_unwrapped - sig
                 if wrap_dir_display:
-                    upper = (upper + 360) % 360; lower = (lower + 360) % 360
+                    upper = (upper + 360) % 360
+                    lower = (lower + 360) % 360
                 axD1.fill_between(mean_plot.index, lower.values, upper.values, alpha=0.15, label="±1σ (circular)")
-        axD1.set_ylabel("Wind direction [°]"); 
-        if wrap_dir_display: axD1.set_ylim(0, 360)
-        axD1.grid(True, alpha=0.3); axD1.legend(ncols=3, fontsize=9)
+                displayed_y.append(np.asarray(upper.values, dtype=float))
+                displayed_y.append(np.asarray(lower.values, dtype=float))
 
+        axD1.set_ylabel("Wind direction [°]")
+        axD1.grid(True, alpha=0.3)
+        axD1.legend(ncols=3, fontsize=9)
+
+        # ---------- Auto-fit y-axis logic ----------
+        if auto_fit_dir_ylim and displayed_y:
+            all_vals = np.concatenate([v[np.isfinite(v)] for v in displayed_y]) if displayed_y else np.array([])
+            if all_vals.size:
+                vmin, vmax = float(np.min(all_vals)), float(np.max(all_vals))
+                # If wrapped display and the data straddles north (0/360), avoid giant span
+                crosses_north = wrap_dir_display and (vmin < 90) and (vmax > 270)
+                if not crosses_north:
+                    if np.isclose(vmin, vmax):
+                        pad = 5.0
+                        axD1.set_ylim(vmin - pad, vmax + pad)
+                    else:
+                        pad = 0.05 * (vmax - vmin)
+                        axD1.set_ylim(vmin - pad, vmax + pad)
+                else:
+                    # Keep full 0–360 if it straddles north
+                    axD1.set_ylim(0, 360)
+        else:
+            # Fallback to classic behavior
+            if wrap_dir_display:
+                axD1.set_ylim(0, 360)
+
+        # Bottom: R% agreement
         if dir_agree_R_pct is not None:
             axD2.plot(dir_agree_R_pct.index, dir_agree_R_pct.values, linewidth=1.8, label="Directional agreement (R) %")
-            axD2.set_ylim(0, 100); axD2.set_ylabel("Agreement [%]"); axD2.set_xlabel(time_xlabel)
-            axD2.grid(True, alpha=0.3); axD2.legend()
+            axD2.set_ylim(0, 100)
+            axD2.set_ylabel("Agreement [%]")
+            axD2.set_xlabel(time_xlabel)
+            axD2.grid(True, alpha=0.3)
+            axD2.legend()
         else:
-            axD2.set_axis_off(); axD2.text(0.5,0.5,"No directional agreement available", ha="center", va="center", transform=axD2.transAxes)
-        figD.suptitle("Wind Direction — Models & Agreement", y=0.98); figD.tight_layout(rect=[0,0,1,0.96]); st.pyplot(figD, clear_figure=True)
+            axD2.set_axis_off()
+            axD2.text(0.5, 0.5, "No directional agreement available", ha="center", va="center", transform=axD2.transAxes)
+
+        figD.suptitle("Wind Direction — Models & Agreement", y=0.98)
+        figD.tight_layout(rect=[0, 0, 1, 0.96])
+        st.pyplot(figD, clear_figure=True)
 
 # Export
 merged = pd.DataFrame(index=time_index)
